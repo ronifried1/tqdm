@@ -1106,6 +1106,19 @@ def test_set_description(caperr):
         t.set_description("\xe1\xe9\xed\xf3\xfa")
 
 
+def test_desc_escape_injection():
+    """`desc` must not be able to inject terminal escape sequences (#1864)"""
+    evil = "evil\x1b[2J\x1b]0;pwned\x07desc"
+    with tqdm(total=10, desc=evil) as t:
+        assert "\x1b" not in t.desc
+
+    with tqdm(total=10) as t:
+        t.set_description(evil)
+        assert "\x1b" not in t.desc
+        t.set_description_str(evil)
+        assert "\x1b" not in t.desc
+
+
 @mark.parametrize("consume", [lambda t: t.update(1), list], ids=["update", "iter"])
 def test_deprecated_gui(caperr, consume):
     """Test `gui=True` requires overriding `__iter__()` and `update()`"""
@@ -1236,6 +1249,15 @@ def test_write(tmp_file):
     t3.close()
 
     assert squash_ctrlchars(after) == [s, s] + squash_ctrlchars(before)
+
+
+def test_write_escape_injection(tmp_file):
+    """`tqdm.write()` must not forward terminal escape sequences (#1864)"""
+    evil = "evil\x1b[2J\x1b]0;pwned\x07message"
+    tqdm.write(evil, file=tmp_file)
+    out = tmp_file.getvalue()
+    assert "\x1b" not in out
+    assert out == "evilmessage\n"
 
 
 def test_write_other_file(tmp_file, tmp_file2):

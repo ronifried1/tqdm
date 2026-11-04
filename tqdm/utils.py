@@ -16,6 +16,19 @@ CUR_OS = sys.platform
 IS_WIN = any(CUR_OS.startswith(i) for i in ['win32', 'cygwin'])
 IS_NIX = any(CUR_OS.startswith(i) for i in ['aix', 'linux', 'darwin', 'freebsd'])
 RE_ANSI = re.compile(r"\x1b\[[;\d]*[A-Za-z]")
+# Matches ANSI/VT100 escape sequences (CSI such as cursor movement/screen
+# clearing, and OSC such as window-title or OSC-52 clipboard writes), plus
+# other non-printable C0/C1 control bytes (excluding the common whitespace
+# controls \t, \n, \r). Used to neutralise untrusted text (e.g. `desc` or
+# messages passed to `tqdm.write()`) before it reaches the terminal, so it
+# cannot inject escape sequences into the user's terminal (see #1864).
+RE_CONTROL = re.compile(
+    r"\x1b(?:\[[0-?]*[ -/]*[@-~]"      # CSI sequence
+    r"|\][^\x07\x1b]*(?:\x07|\x1b\\)?"  # OSC sequence
+    r"|[@-Z\\^_]"                       # other short Fe escape sequences
+    r")"
+    r"|[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]"  # remaining C0/C1 control bytes
+)
 
 try:
     if IS_WIN:
@@ -310,6 +323,19 @@ def disp_len(data):
     ANSI control codes and wide chars.
     """
     return _text_width(RE_ANSI.sub('', data))
+
+
+def strip_control(s):
+    """
+    Remove ANSI/VT100 escape sequences and other non-printable control
+    characters from `s`.
+
+    Intended to sanitise untrusted text (e.g. `desc`, or messages passed to
+    `tqdm.write()`) before it is written to the terminal, preventing
+    terminal escape-sequence injection (screen clearing, window-title
+    rewriting, OSC-52 clipboard hijack, etc.) (see #1864).
+    """
+    return RE_CONTROL.sub('', str(s))
 
 
 def disp_trim(data, length):

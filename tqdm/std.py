@@ -20,7 +20,7 @@ from ._monitor import TMonitor
 from .utils import (
     CallbackIOWrapper, Comparable, DisableOnWriteError, FormatReplace, SimpleTextIOWrapper,
     _is_ascii, _screen_shape_wrapper, _supports_unicode, _term_move_up, disp_len, disp_trim,
-    envwrap)
+    envwrap, strip_control)
 
 __author__ = "https://github.com/tqdm/tqdm#contributions"
 __all__ = ['tqdm', 'trange',
@@ -721,9 +721,10 @@ class tqdm(Comparable):
         if fp is None:
             return
         with cls.external_write_mode(file=file, nolock=nolock):
-            # Write the message
-            fp.write(s)
-            fp.write(end)
+            # Write the message, neutralising any terminal escape/control
+            # sequences it may contain (e.g. from an untrusted source; #1864)
+            fp.write(strip_control(s))
+            fp.write(strip_control(end))
 
     @classmethod
     @contextmanager
@@ -1052,7 +1053,7 @@ class tqdm(Comparable):
 
         # Store the arguments
         self.iterable = iterable
-        self.desc = desc or ''
+        self.desc = strip_control(desc) if desc else ''
         self.total = total
         self.leave = leave
         self.fp = file
@@ -1396,13 +1397,13 @@ class tqdm(Comparable):
         refresh  : bool, optional
             Forces refresh [default: True].
         """
-        self.desc = desc + ': ' if desc else ''
+        self.desc = strip_control(desc) + ': ' if desc else ''
         if refresh:
             self.refresh()
 
     def set_description_str(self, desc=None, refresh=True):
         """Set/modify description without ': ' appended."""
-        self.desc = desc or ''
+        self.desc = strip_control(desc) if desc else ''
         if refresh:
             self.refresh()
 
