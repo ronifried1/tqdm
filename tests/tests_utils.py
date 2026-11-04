@@ -4,7 +4,7 @@ from typing import Union  # py<3.10
 
 from pytest import warns
 
-from tqdm.utils import envwrap
+from tqdm.utils import envwrap, strip_control
 
 
 def test_envwrap_deprecated(monkeypatch):
@@ -62,3 +62,21 @@ def test_envwrap_annotations(monkeypatch):
         return number, string
 
     assert 1.1, "1.1" == annotated()
+
+
+def test_strip_control():
+    """Untrusted text should not be able to inject terminal escape sequences (#1864)"""
+    # CSI: clear screen
+    assert strip_control("evil\x1b[2Jtitle") == "eviltitle"
+    # CSI with private-use parameter byte (e.g. hide cursor)
+    assert strip_control("evil\x1b[?25lhidden") == "evilhidden"
+    # OSC terminated by BEL: window-title rewrite
+    assert strip_control("evil\x1b]0;pwned\x07here") == "evilhere"
+    # OSC terminated by BEL: OSC 52 clipboard hijack
+    assert strip_control("evil\x1b]52;c;QUJDRA==\x07clip") == "evilclip"
+    # lone C0 control chars (e.g. BEL)
+    assert strip_control("bell\x07here") == "bellhere"
+    # common whitespace controls are preserved
+    assert strip_control("tab\there\nnewline\rcarriage") == "tab\there\nnewline\rcarriage"
+    # plain text is unaffected
+    assert strip_control("plain description") == "plain description"
